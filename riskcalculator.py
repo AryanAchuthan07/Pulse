@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import pickle
+
 
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.preprocessing import OneHotEncoder, StandardScaler, MinMaxScaler
@@ -7,66 +9,83 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
+
 try:
-    from xgboost import XGBRegressor
-    USE_XGBOOST = True
+   from xgboost import XGBRegressor
+   USE_XGBOOST = True
 except Exception as e:
-    print(f"Warning: XGBoost could not be loaded: {type(e).__name__}")
-    print("Falling back to RandomForestRegressor...")
-    print("Note: To use XGBoost, install OpenMP: brew install libomp")
-    from sklearn.ensemble import RandomForestRegressor
-    USE_XGBOOST = False
+   print(f"Warning: XGBoost could not be loaded: {type(e).__name__}")
+   print("Falling back to RandomForestRegressor...")
+   print("Note: To use XGBoost, install OpenMP: brew install libomp")
+   from sklearn.ensemble import RandomForestRegressor
+   USE_XGBOOST = False
+
 
 df = pd.read_csv("Health_Risk_Dataset.csv")
 
+
+# Map risk levels to numeric values (only Low, Medium, High are valid)
 risk_map = {"Low": 0, "Medium": 1, "High": 2}
 df["Risk_Label"] = df["Risk_Level"].map(risk_map)
 
+
 missing_risk = df["Risk_Label"].isna().sum()
 if missing_risk > 0:
-    print(f"Warning: {missing_risk} rows have unmapped Risk_Level values")
-    print(f"Unique Risk_Level values: {df['Risk_Level'].unique()}")
-    df = df.dropna(subset=["Risk_Label"])
-    print(f"Removed {missing_risk} rows with missing risk labels")
-    print(f"Remaining rows: {len(df)}")
+   print(f"Warning: {missing_risk} rows have invalid Risk_Level values")
+   print(f"Unique Risk_Level values: {df['Risk_Level'].unique()}")
+   print(f"Valid values are: Low, Medium, High")
+   print(f"Removing rows with invalid risk levels...")
+   df = df.dropna(subset=["Risk_Label"])
+   print(f"Removed {missing_risk} rows with invalid risk labels")
+   print(f"Remaining rows: {len(df)}")
 
-X = df.drop(columns=["Patient_ID", "Risk_Level", "Risk_Label"])
+
+# Drop non-feature columns (including Risk_Score if it exists from previous runs)
+columns_to_drop = ["Patient_ID", "Risk_Level", "Risk_Label"]
+if "Risk_Score" in df.columns:
+   columns_to_drop.append("Risk_Score")
+X = df.drop(columns=columns_to_drop)
 y = df["Risk_Label"]
+
 
 categorical_cols = ["Consciousness", "On_Oxygen", "O2_Scale"]
 numeric_cols = [col for col in X.columns if col not in categorical_cols]
 
+
 preprocess = ColumnTransformer(
-    transformers=[
-        ("num", StandardScaler(), numeric_cols),
-        ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_cols),
-    ]
+   transformers=[
+       ("num", StandardScaler(), numeric_cols),
+       ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_cols),
+   ]
 )
 
+
 if USE_XGBOOST:
-    model = XGBRegressor(
-        n_estimators=400,
-        learning_rate=0.05,
-        max_depth=5,
-        subsample=0.9,
-        colsample_bytree=0.9,
-        objective="reg:squarederror",
-        random_state=42
-    )
+   model = XGBRegressor(
+       n_estimators=400,
+       learning_rate=0.05,
+       max_depth=5,
+       subsample=0.9,
+       colsample_bytree=0.9,
+       objective="reg:squarederror",
+       random_state=42
+   )
 else:
-    model = RandomForestRegressor(
-        n_estimators=400,
-        max_depth=5,
-        min_samples_split=2,
-        min_samples_leaf=1,
-        random_state=42,
-        n_jobs=-1
-    )
+   model = RandomForestRegressor(
+       n_estimators=400,
+       max_depth=5,
+       min_samples_split=2,
+       min_samples_leaf=1,
+       random_state=42,
+       n_jobs=-1
+   )
+
 
 pipeline = Pipeline(steps=[
-    ("preprocess", preprocess),
-    ("model", model)
+   ("preprocess", preprocess),
+   ("model", model)
 ])
+
 
 X_train, X_test, y_train, y_test = train_test_split(
    X, y, test_size=0.2, random_state=42
@@ -82,12 +101,16 @@ mae = mean_absolute_error(y_test, preds)
 r2 = r2_score(y_test, preds)
 
 
+
+
 print("\n" + "="*50)
 print("MODEL EVALUATION METRICS")
 print("="*50)
 print(f"RMSE (Root Mean Squared Error): {rmse:.4f}")
 print(f"MAE (Mean Absolute Error): {mae:.4f}")
 print(f"R² Score: {r2:.4f}")
+
+
 
 
 try:
@@ -100,6 +123,8 @@ try:
        print("\nDataset too small for cross-validation")
 except Exception as e:
    print(f"\nCross-validation skipped: {e}")
+
+
 fitted_preprocessor = pipeline.named_steps['preprocess']
 try:
    feature_names = fitted_preprocessor.get_feature_names_out()
@@ -112,15 +137,19 @@ except AttributeError:
 
 importances = pipeline.named_steps['model'].feature_importances_
 feature_importance_df = pd.DataFrame({
-   'Feature': feature_names,
-   'Importance': importances
+  'Feature': feature_names,
+  'Importance': importances
 }).sort_values('Importance', ascending=False)
+
+
 
 
 print("\n" + "="*50)
 print("TOP 10 MOST IMPORTANT FEATURES")
 print("="*50)
 print(feature_importance_df.head(10).to_string(index=False))
+
+
 
 
 print("\n" + "="*50)
@@ -133,9 +162,9 @@ raw_predictions = pipeline.predict(X)
 
 scaler = MinMaxScaler(feature_range=(0, 100))
 df["Risk_Score"] = scaler.fit_transform(raw_predictions.reshape(-1, 1)).flatten()
-
-
 df["Risk_Score"] = df["Risk_Score"].round(2)
+
+
 
 
 print(f"\nRisk Score Statistics:")
@@ -146,12 +175,23 @@ print(f"  Median: {df['Risk_Score'].median():.2f}")
 print(f"  Std Dev: {df['Risk_Score'].std():.2f}")
 
 
+
+
 print(f"\nRisk Score by Original Risk Level:")
 print(df.groupby('Risk_Level')['Risk_Score'].agg(['mean', 'min', 'max', 'std']).round(2))
 
 
+
+
 output_file = "Health_Risk_Dataset_With_Scores.csv"
 df.to_csv(output_file, index=False)
+
+
+# Save the trained pipeline and scaler for use in patient management
+model_file = "trained_pipeline.pkl"
+with open(model_file, 'wb') as f:
+   pickle.dump((pipeline, scaler), f)
+print(f"\nTrained model saved to: {model_file}")
 
 
 print(f"\n{'='*50}")
@@ -159,3 +199,4 @@ print(f"Results saved to: {output_file}")
 print(f"{'='*50}")
 print(f"\nThe dataset now includes a continuous Risk_Score (0-100)")
 print(f"that provides nuanced risk assessment for resource allocation.")
+print(f"\nYou can now use patient_ui.py to manage patients!")
