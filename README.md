@@ -1,5 +1,5 @@
 # Pulse
-2025 Datagood Datathon project
+2025 UC Berkeley Datathon project
 
 ## **Team:**
 Aryan Achuthan, Arvind Krishna Sivakumar, Kabilesh Yuvaraj
