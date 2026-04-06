@@ -16,6 +16,7 @@ Then we create a Tableau visualization where doctors can see which patients are 
 
 We created a UI in streamlit in the patient_ui.py file that displays this Tableau dashboard and adds features where the doctor can view the dashboard, view all patients, add a patient, and remove a patient.
 
-## **Running Files**
+## **Quick Start**
 After downloading all necessary libaries within requirements.txt, run the command below in the terminal. Streamlit will direct you to the UI of Pulse.
-Command: streamlit run patient_ui.py
+pip install -r requirements.txt
+streamlit run patient_ui.py
