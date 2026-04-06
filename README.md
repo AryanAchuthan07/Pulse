@@ -1,6 +1,9 @@
 # Pulse
 2025 UC Berkeley Datathon project
 
+## Demo
+https://youtu.be/SDSykc_cQ7g
+
 ## **Team:**
 Aryan Achuthan, Arvind Krishna Sivakumar, Kabilesh Yuvaraj
 
